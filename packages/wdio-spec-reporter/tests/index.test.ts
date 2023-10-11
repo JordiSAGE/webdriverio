@@ -10,7 +10,8 @@ import {
     SUITES_WITH_DATA_TABLE,
     SUITES_NO_TESTS_WITH_HOOK_ERROR,
     SUITES_MULTIPLE_ERRORS,
-    SUITES_WITH_DOC_STRING
+    SUITES_WITH_DOC_STRING,
+    SUITES_WITH_RETRY
 } from './__fixtures__/testdata.js'
 
 vi.mock('chalk')
@@ -546,6 +547,30 @@ describe('SpecReporter', () => {
         it('should return no suites', () => {
             expect(tmpReporter.getOrderedSuites().length).toBe(0)
         })
+
+        it('should propagate root suite hook errors', () => {
+            tmpReporter['_suiteUids'] = new Set(['5', '3', '8'])
+            tmpReporter.suites = { '3': { uid: 3 }, '5': { uid: 5 } } as any
+            tmpReporter.currentSuites = [{
+                hooks: [{
+                    type: 'hook',
+                    title: '"before all" hook in "{root}"',
+                    state: 'failed'
+                }, {
+                    type: 'hook',
+                    title: '"after all" hook in "{root}"',
+                    state: undefined
+                }, {
+                    type: 'hook',
+                    title: '"after all" hook in "{root}"',
+                    state: 'failed'
+                }]
+            }] as any
+            const result = tmpReporter.getOrderedSuites()
+            expect(result.length).toBe(4)
+            expect(result[0].hooks.length).toBe(1)
+            expect(result[3].hooks.length).toBe(1)
+        })
     })
 
     describe('indent', () => {
@@ -729,6 +754,24 @@ describe('SpecReporter', () => {
                 expect(printReporter['_onlyFailures']).toBe(true)
                 expect(printReporter.write.mock.calls).toMatchSnapshot()
             })
+        })
+    })
+
+    describe('onRetry', () => {
+        let printReporter: any = null
+        const runner = getRunnerConfig({ hostname: 'localhost' })
+
+        beforeEach(() => {
+            printReporter = new SpecReporter({})
+            printReporter.write = vi.fn()
+            printReporter['_suiteUids'] = SUITE_UIDS
+            printReporter.suites = SUITES_WITH_RETRY
+        })
+
+        it('should group retried test cases', () => {
+            runner.failures = 0
+            printReporter.printReport(runner)
+            expect(printReporter.write.mock.calls).toMatchSnapshot()
         })
     })
 
@@ -921,6 +964,15 @@ describe('SpecReporter', () => {
                 browserName: 'chrome',
                 version: 50,
             } as any, false)).toBe('chrome 50 (unknown)')
+        })
+
+        it('should recognise bundleIds', () => {
+            expect(tmpReporter.getEnviromentCombo({
+                platformName: 'Mac',
+                automationName: 'Mac2',
+                bundleId: 'com.apple.calculator',
+                sessionId: '53d1c8fd-23d9-4e81-a94b-011d2e694b9a'
+            } as any, false)).toBe('com.apple.calculator Mac')
         })
     })
 

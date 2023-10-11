@@ -197,7 +197,7 @@ export default class ConfigParser {
             /**
              * `this._config.spec` is string instead of Array in watch mode
              */
-            this._config.cucumberFeaturesWithLineNumbers = Array.isArray(this._config.spec) ? [...this._config.spec] : [this._config.spec]
+            this._config.cucumberFeaturesWithLineNumbers = Array.isArray(this._config.spec) ? [...new Set(this._config.spec)] : [this._config.spec]
         }
 
         /**
@@ -254,7 +254,7 @@ export default class ConfigParser {
      * attributes from CLI, config and capabilities
      */
     getSpecs(capSpecs?: Spec[], capExclude?: Spec[]) {
-        const isSpecParamPassed = Array.isArray(this._config.spec)
+        const isSpecParamPassed = Array.isArray(this._config.spec) && this._config.spec.length >= 1
         const multiRun = this._config.multiRun
         // when CLI --spec is explicitly specified, this._config.specs contains the filtered
         // specs matching the passed pattern else the specs defined inside the config are returned
@@ -442,7 +442,7 @@ export default class ConfigParser {
                 if (filenames.length === 0) {
                     log.warn('pattern', pattern, 'did not match any file')
                 }
-                files = [...files, ...filenames]
+                files = [...files, ...new Set(filenames)]
             }
         }
         return files

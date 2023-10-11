@@ -1,7 +1,43 @@
-<% if (answers.isUsingTypeScript) {
+<%
+const electronBuilderConfigIsJson = () => answers.electronBuilderConfigPath.endsWith('.json')
+const electronBuilderConfigIsPackageJson = () => answers.electronBuilderConfigPath.endsWith('package.json')
+
+if (answers.purpose === 'electron') {
+    if (answers.electronBuildTool === 'electron-builder' && electronBuilderConfigIsJson()) {
+        %>import fs from 'node:fs'
+<%  }
+    if (answers.electronBuildTool === 'electron-builder' && !answers.electronAppBinaryPath) {
+        %>import path from 'node:path'
+        
+import { getBinaryPath } from 'wdio-electron-service/utils'
+
+<%  }
+}
+
+if (answers.isUsingTypeScript) {
     %>import type { Options } from '@wdio/types'
 
-export const config: Options.Testrunner = {<%
+<% }
+
+if (answers.purpose === 'electron' && answers.electronBuildTool === 'electron-builder') {
+    if (electronBuilderConfigIsJson()) {
+        %>const electronAppRepoPath = path.dirname('<%- answers.electronBuilderConfigPath %>')
+<%  }
+    if (electronBuilderConfigIsPackageJson()) { 
+        %>const packageJson = JSON.parse(fs.readFileSync('<%- answers.electronBuilderConfigPath %>'), 'utf-8'))
+const productName = packageJson.build.productName
+const electronBuilderOutputDirectory = packageJson.build.directories?.output
+
+<%  } else if (electronBuilderConfigIsJson()) {
+    %>const electronBuilderJson = JSON.parse(fs.readFileSync('<%- answers.electronBuilderConfigPath %>', 'utf-8'))
+const productName = electronBuilderJson.productName
+const electronBuilderOutputDirectory = electronBuilderJson.directories?.output
+
+<%  }
+}
+
+if (answers.isUsingTypeScript) {
+    %>export const config: Options.Testrunner = {<%
 } else if (answers.esmSupport) {
     %>export const config = {<%
 } else {
@@ -35,16 +71,15 @@ export const config: Options.Testrunner = {<%
             transpileOnly: true
         }
     },
-    <% } %>
-    <% if(answers.expEnvAccessKey){ %>
+    <% }
+    if(answers.expEnvAccessKey){ %>
     hostname: '<%- answers.expEnvHostname %>',
     <% if (answers.expEnvPort === '443'){%>protocol: 'https',
     <%} else if (answers.expEnvPort === '80'){%>protocol: 'http',
     <%} else { %>protocol: '<%- answers.expEnvProtocol %>',<%}%>
     port: <%- answers.expEnvPort %>,
     path: '/wd/hub',
-    <% } else if(answers.hostname && answers.port) { %>
-    //
+    <% } else if(answers.hostname && answers.port) { %>//
     // =====================
     // Server Configurations
     // =====================
@@ -126,25 +161,7 @@ export const config: Options.Testrunner = {<%
     // Sauce Labs platform configurator - a great tool to configure your capabilities:
     // https://saucelabs.com/platform/platform-configurator
     //
-    capabilities: [{<%
-    if (answers.expEnvAccessKey) { %>
-        // Experitest Access Key
-        // get more information at https://docs.experitest.com/display/TE/Obtaining+Access+Key
-        'experitest:accessKey': '<%- answers.expEnvAccessKey %>',<%
-    }
-    if (answers.setupMobileEnvironment) { %>
-        // capabilities for local Appium web tests on an Android Emulator
-        platformName: 'Android', // or "iOS"
-        browserName: 'Chrome', // or "Safari"
-        'appium:deviceName': 'Android GoogleAPI Emulator', // or "iPhone Simulator"
-        'appium:platformVersion': '12.0', // or "16.2" (for running iOS v16)
-        'appium:automationName': 'UiAutomator2' // or "XCUITest"<%
-    } else {
-        %>
-        // capabilities for local browser web tests
-        browserName: 'chrome' // or "firefox", "microsoftedge", "safari"<%
-    } %>
-    }],
+    <%- include('snippets/capabilities', { answers }) %>
     //
     // ===================
     // Test Configurations
@@ -193,8 +210,8 @@ export const config: Options.Testrunner = {<%
     // your test setup with almost no effort. Unlike plugins, they don't add new
     // commands. Instead, they hook themselves up into the test process.
     <% if(answers.services.length) {
-    %>services: [<%- answers.services.map(service => `'${service}'`) %>],
-    <% } else {
+    %><%- include('snippets/services', { answers }) %><%
+    } else {
     %>// services: [],
     //<% } %>
     // Framework you want to run your specs with.
@@ -214,7 +231,7 @@ export const config: Options.Testrunner = {<%
     // Whether or not retried spec files should be retried immediately or deferred to the end of the queue
     // specFileRetriesDeferred: false,
     //
-    <%- include('reporters', { reporters: answers.reporters }) %>
+    <%- include('snippets/reporters', { reporters: answers.reporters }) %>
     <% if(answers.framework === 'mocha') { %>
     //
     // Options to be passed to Mocha.
@@ -343,15 +360,15 @@ export const config: Options.Testrunner = {<%
      * Hook that gets executed _before_ a hook within the suite starts (e.g. runs before calling
      * beforeEach in Mocha)
      */
-    // beforeHook: function (test, context) {
+    // beforeHook: function (test, context, hookName) {
     // },
     /**
      * Hook that gets executed _after_ a hook within the suite starts (e.g. runs after calling
      * afterEach in Mocha)
      */
-    // afterHook: function (test, context, { error, result, duration, passed, retries }) {
+    // afterHook: function (test, context, { error, result, duration, passed, retries }, hookName) {
     // },
-    <%- include('afterTest', { reporters: answers.reporters }) %>
+    <%- include('snippets/afterTest', { reporters: answers.reporters }) %>
     /**
      * Hook that gets executed after the suite has ended
      * @param {object} suite suite details

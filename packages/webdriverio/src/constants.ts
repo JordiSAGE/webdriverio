@@ -1,10 +1,11 @@
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { createRequire } from 'node:module'
+
 import { UNICODE_CHARACTERS } from '@wdio/utils'
 import type { Options, Capabilities, Services, Reporters } from '@wdio/types'
 
-enum SupportedAutomationProtocols {
+export enum SupportedAutomationProtocols {
     webdriver = 'webdriver',
     devtools = 'devtools',
     stub = './protocol-stub.js'
@@ -45,6 +46,7 @@ export const WDIO_DEFAULTS: Options.Definition<Options.WebdriverIO & Options.Tes
      */
     automationProtocol: {
         type: 'string',
+        default: SupportedAutomationProtocols.webdriver,
         validate: (param: Options.SupportedProtocols) => {
             /**
              * path when proxy is used for browser testing
@@ -54,7 +56,7 @@ export const WDIO_DEFAULTS: Options.Definition<Options.WebdriverIO & Options.Tes
             }
 
             if (!Object.values(SupportedAutomationProtocols).includes(param.toLowerCase() as SupportedAutomationProtocols)) {
-                throw new Error(`Currently only "webdriver" and "devtools" is supproted as automationProtocol, you set "${param}"`)
+                throw new Error(`Currently only "webdriver" and "devtools" is supported as automationProtocol, you set "${param}"`)
             }
 
             try {

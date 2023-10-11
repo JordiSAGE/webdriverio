@@ -8,6 +8,7 @@ import { SevereServiceError } from '../packages/node_modules/webdriverio/build/i
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url))
 const baseConfig = path.resolve(__dirname, 'helpers', 'config.js')
+const parallelMultiRemoteBaseConfig = path.resolve(__dirname, 'helpers', 'parallel-multiremote-config.js')
 const jasmineConfig = path.resolve(__dirname, 'helpers', 'configJasmine.js')
 
 import launch from './helpers/launch.js'
@@ -134,6 +135,7 @@ const jasmineTestrunner = async () => {
         [
             'expect(number).toBe(number)',
             'expect(number).toBe(number)',
+            'expect(number).toBe(number)',
             'expect(object).toEqual(object)',
             'expect(object).toBeFalse(boolean)',
             'expect(string).toHaveTitle(object)',
@@ -141,6 +143,9 @@ const jasmineTestrunner = async () => {
             'expect(object).toBeDisplayed(object)',
             'expect(number).toBe(number)',
             'expect(number).toBe(number)',
+            'expect(object).toBeDefined(function)',
+            'expect(function).toBeInstanceOf(function)',
+            'expect(object).testMatcher(number)',
             ''
         ].join('\n')
     )
@@ -285,7 +290,7 @@ const cucumberTestrunner = async () => {
                 path.resolve(__dirname, 'cucumber', 'test-skipped.feature')
             ],
             cucumberOpts: {
-                tagExpression: '(not @SKIPPED_TAG)',
+                tags: '(not @SKIPPED_TAG)',
                 ignoreUndefinedDefinitions: true,
                 retry: 1,
                 retryTagFilter: '@retry',
@@ -294,6 +299,42 @@ const cucumberTestrunner = async () => {
         }
     )
     assert.strictEqual(skippedSpecs, 1)
+}
+
+/**
+ * Cucumber wdio testrunner -- run single scenario by line number
+ */
+const cucumberTestrunnerByLineNumber = async () => {
+    const logFile = path.join(__dirname, 'cucumber', 'cucumberTestrunnerByLineNumber.log')
+    await fs.rm(logFile, { force: true })
+    await launch(
+        'cucumberTestrunnerByLineNumber',
+        path.resolve(__dirname, 'helpers', 'cucumber-hooks.conf.js'),
+        {
+            autoCompileOpts: { autoCompile: false },
+            spec: [path.resolve(__dirname, 'cucumber', 'test.feature:10')],
+            cucumberOpts: {
+                tags: '(not @SKIPPED_TAG)',
+                scenarioLevelReporter: false
+            },
+            reporters: [
+                ['spec', {
+                    outputDir: __dirname,
+                    stdout: false,
+                    logFile
+                }]]
+        }
+    )
+    // eslint-disable-next-line no-control-regex
+    const specLogs = (await fs.readFile(logFile)).toString().replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '')
+    assert.ok(
+        specLogs.includes('Sync Execution'),
+        'scenario not executed in feature by line number'
+    )
+    assert.ok(
+        !specLogs.includes('Retry Check'),
+        'extra scenarios not filtered out by line number'
+    )
 }
 
 /**
@@ -309,7 +350,7 @@ const cucumberFailAmbiguousDefinitions = async () => {
             cucumberOpts: {
                 ignoreUndefinedDefinitions: true,
                 failAmbiguousDefinitions: true,
-                names: ['failAmbiguousDefinitions']
+                name: ['failAmbiguousDefinitions']
             }
         }
     ).then(
@@ -433,6 +474,17 @@ const multiremote = async () => {
                 capabilities: { browserName: 'chrome' }
             }
         }
+    })
+}
+
+/**
+ * parallel multiremote wdio testrunner tests
+ */
+const parallelMultiremote = async () => {
+    console.log(parallelMultiRemoteBaseConfig)
+    await launch('parallelMultiremote', parallelMultiRemoteBaseConfig, {
+        autoCompileOpts: { autoCompile: false },
+        specs: [path.resolve(__dirname, 'multiremote', 'test.js')],
     })
 }
 
@@ -611,16 +663,34 @@ const nonGlobalTestrunner = async () => {
     assert.strictEqual(hasFailed, false)
 }
 
+/**
+ * Mocha wdio testrunner skip tests via wdio hook
+ */
+const mochaHooksTestrunner = async () => {
+    const { skippedSpecs } = await launch(
+        'mochaHooksTestrunner',
+        path.resolve(__dirname, 'helpers', 'mocha-hooks.conf.js'),
+        {
+            specs: [
+                path.resolve(__dirname, 'mocha', 'test-skipped-hooks.ts'),
+            ]
+        }
+    )
+    assert.strictEqual(skippedSpecs, 0)
+}
+
 (async () => {
     const smokeTests = [
         mochaTestrunner,
         jasmineTestrunner,
         multiremote,
+        parallelMultiremote,
         wdioHooks,
         cjsTestrunner,
         sharedStoreServiceTest,
         mochaSpecGrouping,
         cucumberTestrunner,
+        cucumberTestrunnerByLineNumber,
         cucumberFailAmbiguousDefinitions,
         cucumberReporter,
         standaloneTest,
@@ -638,7 +708,8 @@ const nonGlobalTestrunner = async () => {
         customReporterString,
         customReporterObject,
         severeErrorTest,
-        nonGlobalTestrunner
+        nonGlobalTestrunner,
+        mochaHooksTestrunner
     ]
 
     console.log('\nRunning smoke tests...\n')

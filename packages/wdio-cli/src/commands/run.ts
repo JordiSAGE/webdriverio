@@ -13,6 +13,17 @@ export const command = 'run <configPath>'
 
 export const desc = 'Run your WDIO configuration file to initialize your tests. (default)'
 
+const coerceOpts = (opts: { [x: string]: boolean | string | number }) => {
+    for (const key in opts) {
+        if (opts[key] === 'true') {
+            opts[key] = true
+        } else if (opts[key] === 'false') {
+            opts[key] = false
+        }
+    }
+    return opts
+}
+
 export const cmdArgs = {
     watch: {
         desc: 'Run WebdriverIO in watch mode',
@@ -87,13 +98,16 @@ export const cmdArgs = {
         type: 'number'
     },
     mochaOpts: {
-        desc: 'Mocha options'
+        desc: 'Mocha options',
+        coerce: coerceOpts
     },
     jasmineOpts: {
-        desc: 'Jasmine options'
+        desc: 'Jasmine options',
+        coerce: coerceOpts
     },
     cucumberOpts: {
-        desc: 'Cucumber options'
+        desc: 'Cucumber options',
+        coerce: coerceOpts
     },
     autoCompileOpts: {
         desc: 'Auto compilation options'
@@ -149,6 +163,10 @@ export async function launch(wdioConfPath: string, params: Partial<RunCommandArg
         })
 }
 
+function nodeMajorVersion(): number {
+    return process.versions.node.split('.').map(Number)[0]
+}
+
 export async function handler(argv: RunCommandArguments) {
     const { configPath = 'wdio.conf.js', ...params } = argv
 
@@ -168,6 +186,7 @@ export async function handler(argv: RunCommandArguments) {
      */
     const nodePath = process.argv[0]
     let NODE_OPTIONS = process.env.NODE_OPTIONS || ''
+    const isTSFile = wdioConf.fullPath.endsWith('.ts') || wdioConf.fullPath.endsWith('.mts')
     const runsWithLoader = (
         Boolean(
             process.argv.find((arg) => arg.startsWith('--loader')) &&
@@ -175,15 +194,26 @@ export async function handler(argv: RunCommandArguments) {
         ) ||
         NODE_OPTIONS?.includes('ts-node/esm')
     )
-    if (wdioConf.fullPath.endsWith('.ts') && !runsWithLoader && nodePath) {
+    if (isTSFile && !runsWithLoader && nodePath) {
         NODE_OPTIONS += ' --loader ts-node/esm/transpile-only --no-warnings'
+        if (nodeMajorVersion() >= 20) {
+            // Changes in Node 20 affect how TS Node works with source maps, hence the need for this workaround. See:
+            // - https://github.com/webdriverio/webdriverio/issues/10901
+            // - https://github.com/TypeStrong/ts-node/issues/2053
+            NODE_OPTIONS += ' -r ts-node/register'
+        }
+        const tsNodeProjectFromEnvVar = process.env.TS_NODE_PROJECT &&
+            path.resolve(process.cwd(), process.env.TS_NODE_PROJECT)
+        const tsNodeProjectFromParams = params.autoCompileOpts?.tsNodeOpts?.project &&
+            path.resolve(process.cwd(), params.autoCompileOpts?.tsNodeOpts?.project)
+        const tsNodeProjectRelativeToWdioConfig = path.join(path.dirname(wdioConf.fullPath), 'tsconfig.json')
+        if (tsNodeProjectFromParams) {
+            console.log('Deprecated: use the TS_NODE_PROJECT environment variable instead')
+        }
         const localTSConfigPath = (
-            (
-                params.autoCompileOpts?.tsNodeOpts?.project &&
-                path.resolve(process.cwd(), params.autoCompileOpts?.tsNodeOpts?.project)
-            ) ||
-            path.join(path.dirname(wdioConf.fullPath), 'tsconfig.json')
-        )
+            tsNodeProjectFromEnvVar ||
+            tsNodeProjectFromParams ||
+            tsNodeProjectRelativeToWdioConfig)
         const hasLocalTSConfig = await fs.access(localTSConfigPath).then(() => true, () => false)
         const p = await execa(nodePath, process.argv.slice(1), {
             reject: false,

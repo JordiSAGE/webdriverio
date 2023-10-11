@@ -117,11 +117,11 @@ class JasmineAdapter {
 
         const emitHookEvent = (
             fnName: string,
-            eventType: string
+            eventType: string,
         ) => (
             _test: never,
             _context: never,
-            { error }: { error?: jasmine.FailedExpectation } = {}
+            { error }: { error?: jasmine.FailedExpectation } = {},
         ) => {
             const title = `"${fnName === 'beforeAll' ? 'before' : 'after'} all" hook`
             const hook = {
@@ -149,7 +149,7 @@ class JasmineAdapter {
          */
         INTERFACES.bdd.forEach((fnName) => {
             const isTest = TEST_INTERFACES.includes(fnName)
-            const beforeHook = [...this._config.beforeHook]
+            const beforeHook = [...this._config.beforeHook] as ((test: any, context: any) => void)[]
             const afterHook = [...this._config.afterHook]
 
             /**
@@ -223,8 +223,7 @@ class JasmineAdapter {
                 this._jrunner.addRequires(this._jasmineOpts.requires)
             }
             if (Array.isArray(this._jasmineOpts.helpers)) {
-                // @ts-ignore outdated types
-                this._jrunner.addHelperFiles(this._jasmineOpts.helpers)
+                this._jrunner.addMatchingHelperFiles(this._jasmineOpts.helpers)
             }
             // @ts-ignore outdated types
             await this._jrunner.loadRequires()
@@ -389,16 +388,32 @@ class JasmineAdapter {
         }
     }
 
-    #setupMatchers (jasmine: jasmine.Jasmine): jasmine.CustomAsyncMatcherFactories {
-        // @ts-expect-error not exported in jasmine
-        const jasmineMatchers: jasmine.CustomMatcherFactories = jasmine.matchers
-        const syncMatchers: jasmine.CustomAsyncMatcherFactories = Object.entries(jasmineMatchers).reduce((prev, [name, fn]) => {
+    #transformMatchers (matchers: jasmine.CustomMatcherFactories) {
+        return Object.entries(matchers).reduce((prev, [name, fn]) => {
             prev[name] = (util) => ({
                 compare: async <T>(actual: T, expected: T, ...args: any[]) => fn(util).compare(actual, expected, ...args),
-                negativeCompare: async <T>(actual: T, expected: T, ...args: unknown[]) => fn(util).negativeCompare!(actual, expected, ...args)
+                negativeCompare: async <T>(actual: T, expected: T, ...args: unknown[]) => {
+                    const { pass, message } = fn(util).compare(actual, expected, ...args)
+                    return {
+                        pass: !pass,
+                        message
+                    }
+                }
             })
             return prev
         }, {} as jasmine.CustomAsyncMatcherFactories)
+    }
+
+    #setupMatchers (jasmine: jasmine.Jasmine): jasmine.CustomAsyncMatcherFactories {
+        /**
+         * overwrite "jasmine.addMatchers" to be always async since the `expect` global we
+         * have is the `expectAsync` from Jasmine, so we need to ensure that synchronous
+         * matchers are added to `expectAsync`
+         */
+        globalThis.jasmine.addMatchers = (matchers) => globalThis.jasmine.addAsyncMatchers(this.#transformMatchers(matchers))
+
+        // @ts-expect-error not exported in jasmine
+        const syncMatchers: jasmine.CustomAsyncMatcherFactories = this.#transformMatchers(jasmine.matchers)
         const wdioMatchers: jasmine.CustomAsyncMatcherFactories = Object.entries(matchers as Record<string, any>).reduce((prev, [name, fn]) => {
             prev[name] = () => ({
                 async compare (...args: unknown[]) {

@@ -2,7 +2,7 @@ import type http from 'node:http'
 import type https from 'node:https'
 import type { URL } from 'node:url'
 
-import type { W3CCapabilities, DesiredCapabilities, RemoteCapabilities, RemoteCapability, MultiRemoteCapabilities, Capabilities } from './Capabilities.js'
+import type { W3CCapabilities, DesiredCapabilities, RemoteCapabilities, RemoteCapability, MultiRemoteCapabilities } from './Capabilities.js'
 import type { Hooks, ServiceEntry } from './Services.js'
 import type { ReporterEntry } from './Reporters.js'
 
@@ -54,8 +54,6 @@ export interface Connection {
     hostname?: string
     /**
      * Port your WebDriver server is on.
-     *
-     * @default 4444
      */
     port?: number
     /**
@@ -202,6 +200,11 @@ export interface WebDriver extends Connection {
      * the `wdio` log.
      */
     outputDir?: string
+    /**
+     * The path to the root of the cache directory. This directory is used to store all drivers that are downloaded
+     * when attempting to start a session.
+     */
+    cacheDir?: string
 }
 
 export interface MultiRemoteBrowserOptions {
@@ -261,7 +264,7 @@ export interface WebdriverIO extends Omit<WebDriver, 'capabilities'> {
      */
     automationProtocol?: SupportedProtocols
     /**
-     * If running on Sauce Labs, you can choose to run tests between different datacenters:
+     * If running on Sauce Labs, you can choose to run tests between different data centers:
      * US or EU. To change your region to EU, add region: 'eu' to your config.
      */
     region?: SauceRegions
@@ -297,7 +300,7 @@ export interface Testrunner extends Hooks, Omit<WebdriverIO, 'capabilities'>, We
      * ```js
      * // wdio.conf.js
      * export const config = {
-     *   // ...
+     *   // define parallel running capabilities
      *   capabilities: [{
      *     browserName: 'safari',
      *     platformName: 'MacOS 10.13',
@@ -314,7 +317,7 @@ export interface Testrunner extends Hooks, Omit<WebdriverIO, 'capabilities'>, We
      * ```
      * // wdio.conf.js
      * export const config = {
-     *   // ...
+     *   // multiremote example
      *   capabilities: {
      *     browserA: {
      *       browserName: 'chrome',
@@ -572,7 +575,7 @@ export interface RunnerStart {
     isMultiremote: boolean
     instanceOptions: Record<string, WebdriverIO>
     sessionId: string
-    capabilities: Capabilities
+    capabilities: WebdriverIO.Capabilities
     retry?: number
     failures?: number
     retries?: number

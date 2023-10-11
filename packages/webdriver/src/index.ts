@@ -1,7 +1,7 @@
 import path from 'node:path'
 import logger from '@wdio/logger'
 
-import { webdriverMonad, sessionEnvironmentDetector } from '@wdio/utils'
+import { webdriverMonad, sessionEnvironmentDetector, startWebDriver } from '@wdio/utils'
 import { validateConfig } from '@wdio/config'
 import type { Options, Capabilities } from '@wdio/types'
 
@@ -36,14 +36,17 @@ export default class WebDriver {
         }
 
         log.info('Initiate new session using the WebDriver protocol')
-
+        const driverProcess = await startWebDriver(params)
         const requestedCapabilities = { ...params.capabilities }
         const { sessionId, capabilities } = await startWebDriverSession(params)
         const environment = sessionEnvironmentDetector({ capabilities, requestedCapabilities })
         const environmentPrototype = getEnvironmentVars(environment)
         const protocolCommands = getPrototype(environment)
-        const prototype = { ...protocolCommands, ...environmentPrototype, ...userPrototype }
+        const driverPrototype: Record<string, PropertyDescriptor> = {
+            _driverProcess: { value: driverProcess, configurable: false, writable: true }
+        }
 
+        const prototype = { ...protocolCommands, ...environmentPrototype, ...userPrototype, ...driverPrototype }
         const monad = webdriverMonad(
             { ...params, requestedCapabilities },
             modifier,
